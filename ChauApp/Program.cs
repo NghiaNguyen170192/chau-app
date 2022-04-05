@@ -1,7 +1,9 @@
 ﻿using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
 using System;
+using System.Drawing;
 using System.IO;
+using System.Net;
 
 namespace ChauApp
 {
@@ -10,14 +12,15 @@ namespace ChauApp
         public static void Main(string[] args)
         {
             var input = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "App_Data");
-            var output = @"C:\Users\DELL\Desktop\Châu.xlsx";
-            //var output = @"E:\Châu.xlsx";
-            var files = Directory.GetFiles(input);
+            //var output = @"C:\Users\DELL\Desktop";
+            var output = @"E:\";
+            var files = Directory.GetFiles(input, "*.xlsx");
 
             foreach (var file in files)
             {
                 var workBook = ProcessWorkBook(file);
-                WriteToFile(output, workBook);
+                var fileName = Path.GetFileName(file);
+                WriteToFile(output, fileName, workBook);
             }
         }
 
@@ -39,9 +42,9 @@ namespace ChauApp
                 for (var cellIndex = 0; cellIndex <= row.LastCellNum; cellIndex++)
                 {
                     var cell = row.GetCell(cellIndex);
-                    if(cell == null || cell.StringCellValue == null) continue;
+                    if (cell == null || cell.StringCellValue == null) continue;
 
-                    if (cell.StringCellValue.Contains(url))
+                    if (cell.StringCellValue.Contains(url) || !IsImageUrlValid(url))
                     {
                         cell.SetCellValue(cell.StringCellValue.Replace(url, ""));
                     }
@@ -51,9 +54,39 @@ namespace ChauApp
             return workBook;
         }
 
-        private static void WriteToFile(string file, IWorkbook workBook)
+        private static bool IsImageUrlValid(string url)
         {
-            using (FileStream fileStream = new FileStream(file, FileMode.Create, FileAccess.Write))
+            try
+            {
+                using (var webClient = new WebClient())
+                {
+                    var imageData = webClient.DownloadData(url);
+                    if (imageData.Length <= 0) return false;
+
+                    using (var imgStream = new MemoryStream(imageData))
+                    {
+                        var img = Image.FromStream(imgStream);
+                        if (img.Width >= 350 && img.Height >= 350)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[{url}] - {ex.Message}");
+            }
+
+            return false;
+        }
+
+        private static void WriteToFile(string output, string fileName, IWorkbook workBook)
+        {
+            fileName = fileName.Replace(".xlsx", "-output.xlsx");
+            var path = Path.Combine(output, fileName);
+
+            using (FileStream fileStream = new FileStream(path, FileMode.Create, FileAccess.Write))
             {
                 workBook.Write(fileStream);
             }
@@ -62,7 +95,7 @@ namespace ChauApp
         private static string GetUrl(string text)
         {
             var url = string.Empty;
-            if (String.IsNullOrEmpty(text)) return url;
+            if (string.IsNullOrEmpty(text)) return url;
 
             if (!text.Contains("https")) return url;
 
